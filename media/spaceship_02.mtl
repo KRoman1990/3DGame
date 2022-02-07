@@ -1,0 +1,68 @@
+# Blender MTL File: 'None'
+# Material Count: 6
+
+newmtl Temp_Space_mat
+Ns 18.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:\\Users\\novikova.ue\\Downloads\\2021.03.19_SP\\Test_space_ship\\T_Spase_64.png
+
+newmtl Temp_Space_mat.001
+Ns 18.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:\\Users\\novikova.ue\\Downloads\\2021.03.19_SP\\Test_space_ship\\T_Spase_64.png
+
+newmtl Temp_Space_mat.002
+Ns 18.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:\\Users\\novikova.ue\\Downloads\\2021.03.19_SP\\Test_space_ship\\T_Spase_64.png
+
+newmtl Temp_Space_mat.003
+Ns 18.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:\\Users\\novikova.ue\\Downloads\\2021.03.19_SP\\Test_space_ship\\T_Spase_64.png
+
+newmtl Temp_Space_mat.004
+Ns 18.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:\\Users\\novikova.ue\\Downloads\\2021.03.19_SP\\Test_space_ship\\T_Spase_64.png
+
+newmtl Temp_Space_mat.005
+Ns 18.000005
+Ka 1.000000 1.000000 1.000000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 1
+map_Kd C:\\Users\\novikova.ue\\Downloads\\2021.03.19_SP\\Test_space_ship\\T_Spase_64.png
