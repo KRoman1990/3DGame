@@ -35,9 +35,11 @@ void Enemy::enemy_move()
 	}
 }
 
-void Enemy::enemy_shoot()
+Bullet* Enemy::enemy_shoot()
 {
-
+	irr::core::vector3df bullet_pos = m_pos;
+	bullet_pos.Z -= 12;
+	return new Bullet(m_device, bullet_pos, m_rot);
 }
 
 void Enemy::enemy_set_move_anim_timer(int time)

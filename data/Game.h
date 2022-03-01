@@ -8,9 +8,12 @@
 //#define USE_SDL_MIXER
 
 #include <irrlicht.h>
+#include <list>
+#include <vector>
 #include "Object.h"
 #include "Enemy.h"
 #include "Player.h"
+#include "Bullet.h"
 
 #ifdef _IRR_WINDOWS_
 #include <windows.h>
@@ -59,10 +62,11 @@ private:
 	void createLoadingScreen();
 	void loadSceneData();
 	void switchToNextScene();
-	void shoot();
+	void bullet_collision(Bullet* start);
 	void createParticleImpacts();
 	void move_player(const SEvent& event);
 	void move_enemies();
+	void move_bullets();
 	void enemies_shoot();
 
 	bool fullscreen;
@@ -101,7 +105,8 @@ private:
 	int currentScene;
 
 	Player* m_player;
-	Enemy* m_enemy;
+	std::vector<Enemy*> m_enemies;
+	std::list<Bullet*> m_bullets;
 
 	video::SColor backColor;
 

@@ -15,7 +15,7 @@ Game::Game(bool f, bool m, bool s, bool a, bool v, bool fsaa, video::E_DRIVER_TY
 	currentScene(-2), backColor(0), statusText(0), inOutFader(0),
 	quakeLevelMesh(0), quakeLevelNode(0), skyboxNode(0), model1(0), model2(0),
 	campFire(0), metaSelector(0), mapSelector(0), sceneStartTime(0),
-	timeForThisScene(0), m_enemy(), m_player()
+	timeForThisScene(0), m_player()
 {
 	for (u32 i = 0; i < KEY_KEY_CODES_COUNT; ++i)
 		KeyIsDown[i] = false;
@@ -117,9 +117,18 @@ void Game::run()
 					m_player->PlayerMove(KEY_KEY_A);
 				else if (IsKeyDown(irr::KEY_KEY_D))
 					m_player->PlayerMove(KEY_KEY_D);
+				if (IsKeyDown(irr::KEY_SPACE))
+				{
+					if (device->getTimer()->getTime() - m_player->player_get_shot_timer() >= 1000 && !m_player->GetDeathFlag())
+					{
+						m_player->player_set_shot_timer(device->getTimer()->getTime());
+						m_bullets.push_back(m_player->PlayerShoot());
+					}
+				}
 				if (!(IsKeyDown(irr::KEY_KEY_D) || IsKeyDown(irr::KEY_KEY_A)))
 					m_player->PlayerMove(KEY_KEY_0);
 			}
+			move_bullets();
 			move_enemies();
 			enemies_shoot();
 			// write statistics
@@ -135,8 +144,8 @@ void Game::run()
 				device->setWindowCaption(tmp);
 				lastfps = nowfps;
 			}
+		}
 	}
-}
 
 	device->drop();
 }
@@ -269,7 +278,7 @@ void Game::switchToNextScene()
 	{
 		timeForThisScene = -1;
 		camera = sm->addCameraSceneNode(0, core::vector3df(100, 40, -80), m_player->GetPos());
-		camera->setPosition(core::vector3df(0, PLAYER_START_POS_Y + 200, -30));
+		camera->setPosition(core::vector3df(0, PLAYER_START_POS_Y + 150, -150));
 		camera->setFarValue(5000.0f);
 	}
 	break;
@@ -331,7 +340,11 @@ void Game::loadSceneData()
 	metaSelector->addTriangleSelector(mapSelector);
 
 	m_player = new Player(device);
-	m_enemy = new Enemy(device);
+	m_enemies.push_back(new Enemy(device, core::vector3df(-100, PLAYER_START_POS_Y, 200), 0));
+	m_enemies.push_back(new Enemy(device, core::vector3df(-50, PLAYER_START_POS_Y, 200), 1));
+	m_enemies.push_back(new Enemy(device, core::vector3df(0, PLAYER_START_POS_Y, 200), 2));
+	m_enemies.push_back(new Enemy(device, core::vector3df(50, PLAYER_START_POS_Y, 200), 3));
+	m_enemies.push_back(new Enemy(device, core::vector3df(100, PLAYER_START_POS_Y, 200), 4));
 
 	// load music
 
@@ -382,179 +395,92 @@ void Game::createLoadingScreen()
 		video::SColor(255, 100, 100, 100));
 }
 
-void Game::shoot()
+void Game::bullet_collision(Bullet* bullet)
 {
 	scene::ISceneManager* sm = device->getSceneManager();
-	scene::ICameraSceneNode* camera = sm->getActiveCamera();
 
-	if (!camera || !mapSelector)
-		return;
-
-	SParticleImpact imp;
-	imp.when = 0;
-
-	// get line of camera
-
-	core::vector3df start = m_player->GetPos();
-	core::vector3df end = m_player->GetRot();
-	end.Z += SHOT_LENGTH;
-	end.normalize();
-	end = start + (end * camera->getFarValue());
+	core::vector3df end = bullet->GetPos();
+	int end_x_plus = end.X += 2;
+	int end_x_min = end.X -= 2;
+	end.Y += 3;
 
 	core::triangle3df triangle;
+	end.X = end_x_plus;
 
-	const core::line3d<f32> line(start, end);
+	const core::line3d<f32> line1(bullet->GetPos(), end);
 
 	// get intersection point with map
 	scene::ISceneNode* hitNode;
-	if (sm->getSceneCollisionManager()->getCollisionPoint(
-		line, m_enemy->GetSelector(), end, triangle, hitNode))
+	for (const auto& a : m_enemies)
 	{
-		// collides with wall
-		core::vector3df out = triangle.getNormal();
-		out.setLength(0.03f);
-
-		imp.when = 1;
-		imp.outVector = out;
-		imp.pos = end;
-		m_enemy->Death();
+		if (sm->getSceneCollisionManager()->getCollisionPoint(
+			line1, a->GetSelector(), end, triangle, hitNode))
+		{
+			a->Death();
+			bullet->SetDeathCounter(0);
+		}
 	}
-	else
+	/*if (sm->getSceneCollisionManager()->getCollisionPoint(
+		line1, m_player->GetSelector(), end, triangle, hitNode))
 	{
-		// doesnt collide with wall
-		core::vector3df start = camera->getPosition();
-		core::vector3df end = (camera->getTarget() - start);
-		end.normalize();
-		start += end * 8.0f;
-		end = start + (end * camera->getFarValue());
+		device->closeDevice();
+	}*/
+	end.X = end_x_min;
+	const core::line3d<f32> line2(bullet->GetPos(), end);
+	for (const auto& a : m_enemies)
+	{
+		if (sm->getSceneCollisionManager()->getCollisionPoint(
+			line1, a->GetSelector(), end, triangle, hitNode))
+		{
+			a->Death();
+			bullet->SetDeathCounter(0);
+		}
 	}
-
-	// create fire ball
-	scene::ISceneNode* node = 0;
-	node = sm->addBillboardSceneNode(0,
-		core::dimension2d<f32>(25, 25), start);
-
-	node->setMaterialFlag(video::EMF_LIGHTING, false);
-	node->setMaterialTexture(0, device->getVideoDriver()->getTexture("../media/fireball.bmp"));
-	node->setMaterialType(video::EMT_TRANSPARENT_ADD_COLOR);
-
-	f32 length = (f32)(end - start).getLength();
-	const f32 m_speed = 0.6f;
-	u32 time = (u32)(length / m_speed);
-
-	scene::ISceneNodeAnimator* anim = 0;
-
-	// set flight line
-
-	anim = sm->createFlyStraightAnimator(start, end, time);
-	node->addAnimator(anim);
-	anim->drop();
-
-	anim = sm->createDeleteAnimator(time);
-	node->addAnimator(anim);
-	anim->drop();
-
-	if (imp.when)
+	/*if (sm->getSceneCollisionManager()->getCollisionPoint(
+		line2, m_player->GetSelector(), end, triangle, hitNode))
 	{
-		// create impact note
-		imp.when = device->getTimer()->getTime() + (time - 100);
-		Impacts.push_back(imp);
-}
-
-	// play sound
-#ifdef USE_IRRKLANG
-	if (ballSound)
-		irrKlang->play2D(ballSound);
-#endif
-#ifdef USE_SDL_MIXER
-	if (ballSound)
-		playSound(ballSound);
-#endif
+		device->closeDevice();
+	}*/
 }
 
 void Game::enemies_shoot()
 {
-	if (m_enemy && device->getTimer()->getTime() - m_enemy->enemy_get_shot_timer() >= 3000 && !m_enemy->GetDeathFlag())
+	for (const auto& a : m_enemies)
 	{
-		scene::ISceneManager* sm = device->getSceneManager();
-		scene::ICameraSceneNode* camera = sm->getActiveCamera();
-
-		if (!camera)
-			return;
-
-
-		SParticleImpact imp;
-		imp.when = 0;
-
-		core::vector3df start = m_enemy->GetPos();
-		core::vector3df end = m_player->GetPos();
-
-		core::triangle3df triangle;
-
-		const core::line3d<f32> line(start, end);
-
-		// get intersection point with map
-		scene::ISceneNode* hitNode;
-		if (sm->getSceneCollisionManager()->getCollisionPoint(
-			line, m_player->GetSelector(), end, triangle, hitNode))
+		srand(device->getTimer()->getRealTime());
+		if (a && device->getTimer()->getTime() - a->enemy_get_shot_timer() >= 5000 && !a->GetDeathFlag())
 		{
-			// collides with wall
-			core::vector3df out = triangle.getNormal();
-			out.setLength(0.03f);
-			imp.when = 1;
-			imp.outVector = out;
-			imp.pos = end;
+			a->enemy_set_shot_timer(device->getTimer()->getTime() - rand()%2000);
+			m_bullets.push_back(a->enemy_shoot());
 		}
-		else
-		{
-			// doesnt collide with wall
-			core::vector3df start = camera->getPosition();
-			core::vector3df end = (camera->getTarget() - start);
-			end.normalize();
-			start += end * 8.0f;
-			end = start + (end * camera->getFarValue());
-		}
-
-		// create fire ball
-		scene::ISceneNode* node = 0;
-		node = sm->addBillboardSceneNode(0,
-			core::dimension2d<f32>(25, 25), start);
-
-		node->setMaterialFlag(video::EMF_LIGHTING, false);
-		node->setMaterialTexture(0, device->getVideoDriver()->getTexture("../media/fireball.bmp"));
-		node->setMaterialType(video::EMT_TRANSPARENT_ADD_COLOR);
-
-		f32 length = (f32)(end - start).getLength();
-		const f32 m_speed = 0.15f;
-		u32 time = (u32)(length / m_speed);
-
-		scene::ISceneNodeAnimator* anim = 0;
-
-		// set flight line
-
-		anim = sm->createFlyStraightAnimator(start, end, time);
-		node->addAnimator(anim);
-		anim->drop();
-
-		anim = sm->createDeleteAnimator(time);
-		node->addAnimator(anim);
-		anim->drop();
-
-		if (imp.when)
-		{
-			// create impact note
-			imp.when = device->getTimer()->getTime() + (time - 100);
-			Impacts.push_back(imp);
-		}
-
-		m_enemy->enemy_set_shot_timer(device->getTimer()->getTime());
 	}
 }
 
 void Game::move_enemies()
 {
-	if (m_enemy)
-		m_enemy->MoveSequence();
+	for (const auto& a : m_enemies)
+	{
+		if (a)
+			a->MoveSequence();
+	}
+}
+
+void Game::move_bullets()
+{
+	if (m_bullets.empty())
+	{
+		return;
+	}
+	for (const auto& bullet : m_bullets)
+	{
+		bullet->MoveBullet();
+		bullet_collision(bullet);
+	}
+	if (m_bullets.front()->GetDeathCounter() <= 0)
+	{
+		m_bullets.front()->Death();
+		m_bullets.pop_front();
+	}
 }
 
 void Game::createParticleImpacts()
@@ -669,7 +595,7 @@ void Game::playSound(Mix_Chunk* sample)
 {
 	if (sample)
 		Mix_PlayChannel(-1, sample, 0);
-	}
+}
 
 void Game::pollSound(void)
 {
