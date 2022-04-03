@@ -15,7 +15,7 @@ Game::Game(bool f, bool m, bool s, bool a, bool v, bool fsaa, video::E_DRIVER_TY
 	currentScene(-2), backColor(0), statusText(0), inOutFader(0),
 	quakeLevelMesh(0), quakeLevelNode(0), skyboxNode(0), model1(0), model2(0),
 	campFire(0), metaSelector(0), mapSelector(0), sceneStartTime(0),
-	timeForThisScene(0), m_player()
+	timeForThisScene(0), m_player(), enemies_created()
 {
 	for (u32 i = 0; i < KEY_KEY_CODES_COUNT; ++i)
 		KeyIsDown[i] = false;
@@ -34,16 +34,55 @@ Game::~Game()
 		irrKlang->drop();
 #endif
 }
+void Game::KeyProcessing()
+{
+	if (m_player)
+	{
+		if (IsKeyDown(KEY_KEY_W))
+			m_player->PlayerMove(KEY_KEY_W);
+		else if (IsKeyDown(irr::KEY_KEY_S))
+			m_player->PlayerMove(KEY_KEY_S);
+		if (IsKeyDown(irr::KEY_KEY_A))
+			m_player->PlayerMove(KEY_KEY_A);
+		else if (IsKeyDown(irr::KEY_KEY_D))
+			m_player->PlayerMove(KEY_KEY_D);
+		if (IsKeyDown(irr::KEY_SPACE))
+		{
+			if (device->getTimer()->getTime() - m_player->player_get_shot_timer() >= 800 && !m_player->GetDeathFlag())
+			{
+				m_player->player_set_shot_timer(device->getTimer()->getTime());
+				m_bullets.push_back(std::make_shared < Bullet>(*m_player->PlayerShoot()));
+				if (m_player->GetFlag() >= 5)
+				{
+					auto rot = m_player->GetRot();
+					rot.Y -= 20;
+					for (int i = 0; i < 2; i++)
+					{
+						m_bullets.push_back(std::make_shared <Bullet>(*new Bullet(device, m_player->GetPos(), rot)));
+						rot.Y += 40;
+					}
+				}
+				if (m_player->GetFlag() >= 12)
+				{
+					auto rot = m_player->GetRot();
+					rot.Y -= 10;
+					for (int i = 0; i < 2; i++)
+					{
+						m_bullets.push_back(std::make_shared <Bullet>(*new Bullet(device, m_player->GetPos(), rot)));
+						rot.Y += 20;
+					}
+				}
+				irrklang::ISound* snd = irrKlang->play2D("../media/ball.wav");
+			}
+		}
+		if (!(IsKeyDown(irr::KEY_KEY_D) || IsKeyDown(irr::KEY_KEY_A)))
+			m_player->PlayerMove(KEY_KEY_0);
+	}
+}
 
 void Game::run()
 {
-	core::dimension2d<u32> resolution(800, 600);
-
-	if (driverType == video::EDT_BURNINGSVIDEO || driverType == video::EDT_SOFTWARE)
-	{
-		resolution.Width = 640;
-		resolution.Height = 480;
-	}
+	core::dimension2d<u32> resolution(RES_H, RES_W);
 
 	irr::SIrrlichtCreationParameters params;
 	params.DriverType = driverType;
@@ -59,10 +98,6 @@ void Game::run()
 	if (!device)
 		return;
 
-	//	if (device->getFileSystem()->existFile("irrlicht.dat"))
-	//		device->getFileSystem()->addFileArchive("irrlicht.dat");
-	//	else
-	//		device->getFileSystem()->addFileArchive("../media/irrlicht.dat");
 	if (device->getFileSystem()->existFile("map-20kdm2.pk3"))
 		device->getFileSystem()->addFileArchive("map-20kdm2.pk3");
 	else
@@ -84,6 +119,7 @@ void Game::run()
 	s32 now = 0;
 	s32 lastfps = 0;
 	sceneStartTime = device->getTimer()->getTime();
+	srand(device->getTimer()->getRealTime());
 	while (device->run() && driver)
 	{
 		if (device->isWindowActive())
@@ -95,7 +131,7 @@ void Game::run()
 				irrKlang->setListenerPosition(cam->getAbsolutePosition(), cam->getTarget());
 #endif
 
-			// load next scene if necessary
+			//// load next scene if necessary
 			now = device->getTimer()->getTime();
 			if (now - sceneStartTime > timeForThisScene && timeForThisScene != -1)
 				switchToNextScene();
@@ -103,41 +139,40 @@ void Game::run()
 			createParticleImpacts();
 
 			driver->beginScene(timeForThisScene != -1, true, backColor);
-
+			if (m_enemies.size() == 0)
+			{
+				m_level += 1;
+				CreateLevel(m_level);
+				for (auto i : m_bullets)
+					i->SetDeathCounter(0);
+				enemies_created = true;
+			}
 			smgr->drawAll();
 			guienv->drawAll();
 			driver->endScene();
-			if (m_player)
+			if (enemies_created == true)
 			{
-				if (IsKeyDown(KEY_KEY_W))
-					m_player->PlayerMove(KEY_KEY_W);
-				else if (IsKeyDown(irr::KEY_KEY_S))
-					m_player->PlayerMove(KEY_KEY_S);
-				if (IsKeyDown(irr::KEY_KEY_A))
-					m_player->PlayerMove(KEY_KEY_A);
-				else if (IsKeyDown(irr::KEY_KEY_D))
-					m_player->PlayerMove(KEY_KEY_D);
-				if (IsKeyDown(irr::KEY_SPACE))
-				{
-					if (device->getTimer()->getTime() - m_player->player_get_shot_timer() >= 1000 && !m_player->GetDeathFlag())
-					{
-						m_player->player_set_shot_timer(device->getTimer()->getTime());
-						m_bullets.push_back(m_player->PlayerShoot());
-					}
-				}
-				if (!(IsKeyDown(irr::KEY_KEY_D) || IsKeyDown(irr::KEY_KEY_A)))
-					m_player->PlayerMove(KEY_KEY_0);
+				IntroEnemies();
+				if (m_enemies.back()->GetPos().Z == last_enemy_pos)
+					enemies_created = false;
 			}
-			move_bullets();
-			move_enemies();
-			enemies_shoot();
+			else
+			{
+				KeyProcessing();
+				move_bullets();
+				move_enemies();
+				enemies_shoot();
+			}
+
 			// write statistics
 			const s32 nowfps = driver->getFPS();
 
-			swprintf(tmp, 255, L"%ls fps:%3d triangles:%0.3f mio/s",
-				driver->getName(), driver->getFPS(),
-				driver->getPrimitiveCountDrawn(1) * (1.f / 1000000.f));
-
+			if (m_player)
+			{
+				swprintf(tmp, 255, L"%ls fps:%3d triangles:%0.3f mio/s points: %d stage: %d",
+					driver->getName(), driver->getFPS(),
+					driver->getPrimitiveCountDrawn(1) * (1.f / 1000000.f), m_player->GetFlag(), m_level);
+			}
 			statusText->setText(tmp);
 			if (nowfps != lastfps)
 			{
@@ -172,6 +207,27 @@ bool Game::OnEvent(const SEvent& event)
 	return false;
 }
 
+void Game::MakeEnemies(int amt, int length, int line, int type)
+{
+	int l;
+	if (amt == 1)
+	{
+		l = 0;
+	}
+	else
+	{
+		l = -1 * length / 2;
+	}
+	for (int i = 0; i < amt; i++)
+	{
+		m_enemies.push_back(std::make_shared<Enemy>(*new Enemy(device, core::vector3df(l, PLAYER_START_POS_Y, 600 + 75 * line), i, type)));
+		last_enemy_pos = 200 +75*line;
+		if (amt != 1)
+		{
+			l += length / (amt - 1);
+		}
+	}
+}
 
 void Game::switchToNextScene()
 {
@@ -201,77 +257,6 @@ void Game::switchToNextScene()
 	case 0: // load scene
 		timeForThisScene = 0;
 		loadSceneData();
-		break;
-
-	case 1: // panorama camera
-	{
-		currentScene += 1;
-		//camera = sm->addCameraSceneNode(0, core::vector3df(0,0,0), core::vector3df(-586,708,52));
-		//camera->setTarget(core::vector3df(0,400,0));
-
-		core::array<core::vector3df> points;
-
-		points.push_back(core::vector3df(-931.473755f, 138.300003f, 987.279114f)); // -49873
-		points.push_back(core::vector3df(-847.902222f, 136.757553f, 915.792725f)); // -50559
-		points.push_back(core::vector3df(-748.680420f, 152.254501f, 826.418945f)); // -51964
-		points.push_back(core::vector3df(-708.428406f, 213.569580f, 784.466675f)); // -53251
-		points.push_back(core::vector3df(-686.217651f, 288.141174f, 762.965576f)); // -54015
-		points.push_back(core::vector3df(-679.685059f, 365.095612f, 756.551453f)); // -54733
-		points.push_back(core::vector3df(-671.317871f, 447.360107f, 749.394592f)); // -55588
-		points.push_back(core::vector3df(-669.468445f, 583.335632f, 747.711853f)); // -56178
-		points.push_back(core::vector3df(-667.611267f, 727.313232f, 746.018250f)); // -56757
-		points.push_back(core::vector3df(-665.853210f, 862.791931f, 744.436096f)); // -57859
-		points.push_back(core::vector3df(-642.649597f, 1026.047607f, 724.259827f)); // -59705
-		points.push_back(core::vector3df(-517.793884f, 838.396790f, 490.326050f)); // -60983
-		points.push_back(core::vector3df(-474.387299f, 715.691467f, 344.639984f)); // -61629
-		points.push_back(core::vector3df(-444.600250f, 601.155701f, 180.938095f)); // -62319
-		points.push_back(core::vector3df(-414.808899f, 479.691406f, 4.866660f)); // -63048
-		points.push_back(core::vector3df(-410.418945f, 429.642242f, -134.332687f)); // -63757
-		points.push_back(core::vector3df(-399.837585f, 411.498383f, -349.350983f)); // -64418
-		points.push_back(core::vector3df(-390.756653f, 403.970093f, -524.454407f)); // -65005
-		points.push_back(core::vector3df(-334.864227f, 350.065491f, -732.397400f)); // -65701
-		points.push_back(core::vector3df(-195.253387f, 349.577209f, -812.475891f)); // -66335
-		points.push_back(core::vector3df(16.255573f, 363.743134f, -833.800415f)); // -67170
-		points.push_back(core::vector3df(234.940964f, 352.957825f, -820.150696f)); // -67939
-		points.push_back(core::vector3df(436.797668f, 349.236450f, -816.914185f)); // -68596
-		points.push_back(core::vector3df(575.236206f, 356.244812f, -719.788513f)); // -69166
-		points.push_back(core::vector3df(594.131042f, 387.173828f, -609.675598f)); // -69744
-		points.push_back(core::vector3df(617.615234f, 412.002899f, -326.174072f)); // -70640
-		points.push_back(core::vector3df(606.456848f, 403.221954f, -104.179291f)); // -71390
-		points.push_back(core::vector3df(610.958252f, 407.037750f, 117.209778f)); // -72085
-		points.push_back(core::vector3df(597.956909f, 395.167877f, 345.942200f)); // -72817
-		points.push_back(core::vector3df(587.383118f, 391.444519f, 566.098633f)); // -73477
-		points.push_back(core::vector3df(559.572449f, 371.991333f, 777.689453f)); // -74124
-		points.push_back(core::vector3df(423.753204f, 329.990051f, 925.859741f)); // -74941
-		points.push_back(core::vector3df(247.520050f, 252.818954f, 935.311829f)); // -75651
-		points.push_back(core::vector3df(114.756012f, 199.799759f, 805.014160f));
-		points.push_back(core::vector3df(96.783348f, 181.639481f, 648.188110f));
-		points.push_back(core::vector3df(97.865623f, 138.905975f, 484.812561f));
-		points.push_back(core::vector3df(99.612457f, 102.463669f, 347.603210f));
-		points.push_back(core::vector3df(99.612457f, 102.463669f, 347.603210f));
-		points.push_back(core::vector3df(99.612457f, 102.463669f, 347.603210f));
-
-		timeForThisScene = (points.size() - 3) * 1000;
-
-		camera = sm->addCameraSceneNode(0, points[0], core::vector3df(0, 400, 0));
-		//camera->setTarget(core::vector3df(0,400,0));
-
-		sa = sm->createFollowSplineAnimator(device->getTimer()->getTime(),
-			points);
-		camera->addAnimator(sa);
-		sa->drop();
-
-		inOutFader->fadeIn(7000);
-	}
-	break;
-
-	case 2:	// down fly anim camera
-		camera = sm->addCameraSceneNode(0, core::vector3df(100, 40, -80), core::vector3df(844, 670, -885));
-		sa = sm->createFlyStraightAnimator(core::vector3df(94, 1002, 127),
-			core::vector3df(108, 15, -60), 10000, true);
-		camera->addAnimator(sa);
-		timeForThisScene = 9900;
-		sa->drop();
 		break;
 
 	case 3: // interactive, go around
@@ -339,12 +324,8 @@ void Game::loadSceneData()
 	metaSelector = sm->createMetaTriangleSelector();
 	metaSelector->addTriangleSelector(mapSelector);
 
-	m_player = new Player(device);
-	m_enemies.push_back(new Enemy(device, core::vector3df(-100, PLAYER_START_POS_Y, 200), 0));
-	m_enemies.push_back(new Enemy(device, core::vector3df(-50, PLAYER_START_POS_Y, 200), 1));
-	m_enemies.push_back(new Enemy(device, core::vector3df(0, PLAYER_START_POS_Y, 200), 2));
-	m_enemies.push_back(new Enemy(device, core::vector3df(50, PLAYER_START_POS_Y, 200), 3));
-	m_enemies.push_back(new Enemy(device, core::vector3df(100, PLAYER_START_POS_Y, 200), 4));
+	m_player = std::make_shared<Player>(*new Player(device));
+	m_player->SetInvincibleCounter(100);
 
 	// load music
 
@@ -389,69 +370,117 @@ void Game::createLoadingScreen()
 	device->getGUIEnvironment()->getSkin()->setFont(
 		device->getGUIEnvironment()->getFont("../media/fonthaettenschweiler.bmp"));
 
+
 	// set new font color
 
 	device->getGUIEnvironment()->getSkin()->setColor(gui::EGDC_BUTTON_TEXT,
 		video::SColor(255, 100, 100, 100));
 }
 
-void Game::bullet_collision(Bullet* bullet)
+void Game::bullet_collision(std::shared_ptr<Bullet>bullet)
 {
 	scene::ISceneManager* sm = device->getSceneManager();
 
 	core::vector3df end = bullet->GetPos();
-	int end_x_plus = end.X += 2;
-	int end_x_min = end.X -= 2;
-	end.Y += 3;
+	end.Y += BULLET_SIZE;
 
 	core::triangle3df triangle;
-	end.X = end_x_plus;
+	end.X += BULLET_SIZE;
 
 	const core::line3d<f32> line1(bullet->GetPos(), end);
 
 	// get intersection point with map
 	scene::ISceneNode* hitNode;
-	for (const auto& a : m_enemies)
+	for (auto it = m_enemies.begin(); it < m_enemies.end(); it++)
 	{
+		auto a = *it;
 		if (sm->getSceneCollisionManager()->getCollisionPoint(
-			line1, a->GetSelector(), end, triangle, hitNode))
+			line1, a->GetSelector(), end, triangle, hitNode) && bullet->GetFlag() == 0)
 		{
 			a->Death();
 			bullet->SetDeathCounter(0);
+			m_enemies.erase(it);
+			m_player->SetFlag(m_player->GetFlag() + 1 + a->GetFlag());
+			irrklang::ISound* snd = irrKlang->play2D("../media/impact.wav");
+			break;
 		}
 	}
-	/*if (sm->getSceneCollisionManager()->getCollisionPoint(
-		line1, m_player->GetSelector(), end, triangle, hitNode))
+	if (sm->getSceneCollisionManager()->getCollisionPoint(
+		line1, m_player->GetSelector(), end, triangle, hitNode) && bullet->GetFlag() != 0)
 	{
-		device->closeDevice();
-	}*/
-	end.X = end_x_min;
+		if (m_player->GetFlag() < 1)
+		{
+			if (m_player->GetInvincibleCounter() <= 0)
+				device->closeDevice();
+		}
+		else
+		{
+			m_player->SetFlag(0);
+			m_player->SetInvincibleCounter(50);
+		}
+		bullet->SetDeathCounter(0);
+	}
+	end.X -= BULLET_SIZE * 2;
 	const core::line3d<f32> line2(bullet->GetPos(), end);
-	for (const auto& a : m_enemies)
+	for (auto it = m_enemies.begin(); it < m_enemies.end(); it++)
 	{
+		auto a = *it;
 		if (sm->getSceneCollisionManager()->getCollisionPoint(
-			line1, a->GetSelector(), end, triangle, hitNode))
+			line1, a->GetSelector(), end, triangle, hitNode) && bullet->GetFlag() == 0)
 		{
 			a->Death();
 			bullet->SetDeathCounter(0);
+			m_enemies.erase(it);
+			m_player->SetFlag(m_player->GetFlag() + 1);
+			irrklang::ISound* snd = irrKlang->play2D("../media/impact.wav");
+			break;
 		}
 	}
-	/*if (sm->getSceneCollisionManager()->getCollisionPoint(
-		line2, m_player->GetSelector(), end, triangle, hitNode))
+	if (sm->getSceneCollisionManager()->getCollisionPoint(
+		line2, m_player->GetSelector(), end, triangle, hitNode) && bullet->GetFlag() == 1)
 	{
-		device->closeDevice();
-	}*/
+		if (m_player->GetFlag() < 5)
+		{
+			if (m_player->GetInvincibleCounter() <= 0)
+				device->closeDevice();
+		}
+		else
+		{
+			m_player->SetFlag(0);
+			m_player->SetInvincibleCounter(50);
+		}
+		bullet->SetDeathCounter(0);
+	}
 }
 
 void Game::enemies_shoot()
 {
+	auto now = device->getTimer()->getTime();
 	for (const auto& a : m_enemies)
 	{
-		srand(device->getTimer()->getRealTime());
-		if (a && device->getTimer()->getTime() - a->enemy_get_shot_timer() >= 5000 && !a->GetDeathFlag())
+		if (a && !a->GetDeathFlag() && now - a->enemy_get_shot_timer() >= ENEMY_SHOT_DELAY)
 		{
-			a->enemy_set_shot_timer(device->getTimer()->getTime() - rand()%2000);
-			m_bullets.push_back(a->enemy_shoot());
+			irrklang::ISound* snd = irrKlang->play2D("../media/ball.wav");
+			a->enemy_set_shot_timer(now - rand() % (ENEMY_SHOT_DELAY / 2));
+			auto rot = a->GetRot();
+			switch (a->GetFlag())
+			{
+			case 0:
+				m_bullets.push_back(std::make_shared <Bullet>(*new Bullet(device, a->GetPos(), rot, 1)));
+				break;
+			case 1:
+				m_bullets.push_back(std::make_shared <Bullet>(*new Bullet(device, a->GetPos(), rot, 1)));
+				rot.Y -= 20;
+				for (int i = 0; i < 2; i++)
+				{
+					m_bullets.push_back(std::make_shared <Bullet>(*new Bullet(device, a->GetPos(), rot, 1)));
+					rot.Y += 40;
+				}
+				break;
+			case 2:
+				m_bullets.push_back(std::make_shared <Bullet>(*new Bullet(device, a->GetPos(), rot, 2)));
+				break;
+			}
 		}
 	}
 }
@@ -471,15 +500,47 @@ void Game::move_bullets()
 	{
 		return;
 	}
-	for (const auto& bullet : m_bullets)
+	for (auto it = m_bullets.begin(); it < m_bullets.end(); it++)
 	{
+		auto bullet = *it;
+		if (m_bullets.front()->GetDeathCounter() <= 0)
+		{
+			bullet->Death();
+			m_bullets.erase(it);
+			break;
+		}
 		bullet->MoveBullet();
 		bullet_collision(bullet);
 	}
-	if (m_bullets.front()->GetDeathCounter() <= 0)
+
+}
+
+void Game::CreateLevel(const int level_num)
+{
+	switch (level_num)
 	{
-		m_bullets.front()->Death();
-		m_bullets.pop_front();
+	case 1:
+		MakeEnemies(1, 300, 0, 1);
+		MakeEnemies(3, 300, 1, 2);
+		break;
+	case 2:
+		MakeEnemies(2, 100, -1, 0);
+		MakeEnemies(3, 150, 0, 0);
+		MakeEnemies(4, 200, 1, 0);
+		break;
+	case 3:
+		MakeEnemies(2, 100, 1, 1);
+		MakeEnemies(2, 150, 0, 1);
+		break;
+	case 4:
+		MakeEnemies(5, 300, -2, 0);
+		MakeEnemies(7, 350, 1, 0);
+		break;
+	case 5:
+		MakeEnemies(3, 200, -1, 0);
+		MakeEnemies(4, 150, 0, 0);
+		MakeEnemies(3, 200, 1, 1);
+		break;
 	}
 }
 
@@ -542,6 +603,23 @@ void Game::createParticleImpacts()
 		}
 }
 
+void Game::IntroEnemies()
+{
+	for (auto obj : m_enemies)
+	{
+		if (device->getTimer()->getTime() - obj->enemy_get_move_anim_timer() >= TIME_FOR_ANIM && !obj->GetDeathFlag())
+		{
+			auto prev_cord = obj->GetPos();
+			obj->Move(DOWN);
+			irr::scene::ISceneNodeAnimator* anim = 0;
+			anim = device->getSceneManager()->createFlyStraightAnimator(
+				prev_cord, obj->GetPos(), TIME_FOR_ANIM, false);
+			obj->GetModel()->addAnimator(anim);
+			anim->drop();
+			obj->enemy_set_move_anim_timer(device->getTimer()->getTime());
+		}
+	}
+}
 
 #ifdef USE_IRRKLANG
 void Game::startIrrKlang()
@@ -553,14 +631,14 @@ void Game::startIrrKlang()
 
 	// play music
 
-	irrklang::ISound* snd = irrKlang->play2D("../media/IrrlichtTheme.ogg", true, false, true);
-	if (!snd)
-		snd = irrKlang->play2D("IrrlichtTheme.ogg", true, false, true);
+	irrklang::ISound* bgsnd = irrKlang->play2D("../media/IrrlichtTheme.ogg", true, false, true);
+	if (!bgsnd)
+		bgsnd = irrKlang->play2D("IrrlichtTheme.ogg", true, false, true);
 
-	if (snd)
+	if (bgsnd)
 	{
-		snd->setVolume(0.5f); // 50% volume
-		snd->drop();
+		bgsnd->setVolume(0.6f); // 50% volume
+		bgsnd->drop();
 	}
 
 	// preload both sound effects

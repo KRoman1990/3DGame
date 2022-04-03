@@ -21,7 +21,7 @@ class Object
 {
 public:
 	void Move(int dir);
-	void SetRotation(int number) { m_rot.Z = number; m_model->setRotation(m_rot); }
+	void SetRotation(double number) { m_rot.Z = number; m_model->setRotation(m_rot); }
 	void Death() {
 		m_objectSelector = nullptr;  m_model->remove(); m_death_flag = 1;
 	}
@@ -42,13 +42,13 @@ protected:
 
 	int m_speed;
 
-	irr::scene::IMesh* m_mesh;
-	irr::core::vector3df m_pos;
-	irr::core::vector3df m_rot;
-	irr::scene::IMeshSceneNode* m_model;
-	irr::scene::ITriangleSelector* m_objectSelector;
-	irr::IrrlichtDevice* m_device;
-	irr::video::IVideoDriver* m_driver;
-	irr::scene::ISceneManager* m_sm;
-	bool m_death_flag;
+	irr::scene::IMesh* m_mesh = nullptr;
+	irr::core::vector3df m_pos = {};
+	irr::core::vector3df m_rot = {};
+	irr::scene::IMeshSceneNode* m_model = nullptr;
+	irr::scene::ITriangleSelector* m_objectSelector = nullptr;
+	irr::IrrlichtDevice* m_device = nullptr;
+	irr::video::IVideoDriver* m_driver = nullptr;
+	irr::scene::ISceneManager* m_sm = nullptr;
+	bool m_death_flag = false;
 };

@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
 	bool music = true;
 	bool shadows = false;
 	bool additive = false;
-	bool vsync = false;
+	bool vsync = true;
 	bool aa = false;
 
 #ifndef _IRR_WINDOWS_

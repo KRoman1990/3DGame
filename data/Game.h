@@ -4,13 +4,12 @@
 #ifndef __C_DEMO_H_INCLUDED__
 #define __C_DEMO_H_INCLUDED__
 
-//#define USE_IRRKLANG
+#define USE_IRRKLANG
 //#define USE_SDL_MIXER
 
 #include <irrlicht.h>
 #include <list>
 #include <vector>
-#include "Object.h"
 #include "Enemy.h"
 #include "Player.h"
 #include "Bullet.h"
@@ -18,6 +17,8 @@
 #ifdef _IRR_WINDOWS_
 #include <windows.h>
 #endif
+
+#include <memory>
 
 using namespace irr;
 
@@ -37,6 +38,8 @@ using namespace irr;
 #endif
 
 #define SHOT_LENGTH 600
+#define RES_W 600
+#define RES_H 800
 
 const int CAMERA_COUNT = 7;
 
@@ -58,16 +61,19 @@ public:
 	virtual bool OnEvent(const SEvent& event);
 
 private:
-
+	void CreateLevel(const int level_num);
+	void MakeEnemies(int amt, int length, int line, int type);
+	void KeyProcessing();
 	void createLoadingScreen();
 	void loadSceneData();
 	void switchToNextScene();
-	void bullet_collision(Bullet* start);
+	void bullet_collision(std::shared_ptr<Bullet>bullet);
 	void createParticleImpacts();
 	void move_player(const SEvent& event);
 	void move_enemies();
 	void move_bullets();
 	void enemies_shoot();
+	void IntroEnemies();
 
 	bool fullscreen;
 	bool music;
@@ -76,6 +82,7 @@ private:
 	bool vsync;
 	bool aa;
 	bool KeyIsDown[KEY_KEY_CODES_COUNT];
+	bool enemies_created;
 	video::E_DRIVER_TYPE driverType;
 	IrrlichtDevice* device;
 
@@ -103,10 +110,12 @@ private:
 	};
 
 	int currentScene;
+	int m_level = 0;
+	int last_enemy_pos = 0;
 
-	Player* m_player;
-	std::vector<Enemy*> m_enemies;
-	std::list<Bullet*> m_bullets;
+	std::shared_ptr<Player> m_player;
+	std::vector<std::shared_ptr<Enemy>> m_enemies;
+	std::vector<std::shared_ptr<Bullet>> m_bullets;
 
 	video::SColor backColor;
 
